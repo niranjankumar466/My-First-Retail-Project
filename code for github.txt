@@ -1,0 +1,295 @@
+####....... Set the working directory, where is my data. 
+
+setwd("E:/Laptop/E/Data Science/R/Project detail/Project_data/2_retail")
+getwd
+
+
+####_________ for read the csv file , where the train and test data are saved. 
+
+store_train=read.csv("store_train.csv",stringsAsFactors = FALSE)
+store_test=read.csv("store_test.csv",stringsAsFactors = F)
+
+
+####....... create a new variable store, which is store NA values. We creating this variables, 
+beacuse we combine the our the test and train data for data preparation.
+
+store_test$store=NA
+
+
+####..... create new variable (data) in test and train and given values test in test data and train in train data, for seperate the train data and test data, after data preparation. 
+
+store_test$data='test'
+store_train$data='train'
+
+
+####..... combine the train and test date for data preparation.
+
+store_all=rbind(store_train,store_test)
+
+
+####.......... we are check here NA or missing values in our entire data, we have to need the fill of missing values. 
+sum(is.na(store_all))
+lapply(store_all, function (x) sum(is.na(x)))
+
+library(dplyr)
+glimpse(store_all)
+
+#####.... for fill the NA values, we filling the NA values with mean and median. So we check the mean and median of the that variables.  
+
+sort(table(store_all$country))
+unique(store_all$country)
+
+mean(store_all$country, na.rm=T)
+median(store_all$country, na.rm=T)
+mode('store_all$country')
+
+####.... Here we fill na Value with median of the varibales(country).
+
+store_all$country[is.na(store_all$country)]=median(store_all$country, na.rm=T)
+
+###..... Check the NA's values in the data.
+
+lapply(store_all, function (x) sum(is.na (x)))
+
+
+####...........  Same as below for variables population. Fill the NA values with its median.
+
+glimpse(store_all)
+unique(store_all$population)
+mean(store_all$population, na.rm=T)
+median(store_all$population, na.rm=T)
+
+store_all$population[is.na(store_all$population)]=median(store_all$population,na.rm=T)
+
+######....
+
+lapply(store_all, function (x) sum(is.na(x)))
+
+
+####.....
+
+library(dplyr)
+glimpse(store_all)
+
+#####............. create dummies for character variables in our entire date. it work with N-1.
+
+CreateDummies=function(data,var,freq_cutoff=0){
+  t=table(data[,var])
+  t=t[t>freq_cutoff]
+  sort(t)
+  categories=names(t)[-1]
+  
+  for (cat in categories){
+    name=paste(var,cat,sep="_")
+    name=gsub(" ","",name)
+    name=gsub("-","_",name)
+    name=gsub("\\?","Q",name)
+    name=gsub("<","LT_",name)
+    name=gsub("\\+","",name)
+    
+    data[,name]=as.numeric(data[,var]==cat)
+  }
+  
+  data[,var]=NULL
+  return(data)
+}
+
+
+######...... for check the cutoffs of variables. here I checking the cutoffs value for all character variables one by one.
+
+####....This for countyname.
+
+sort(table(store_all$countyname))
+
+t=sort(table(store_all[,'countyname']))
+t
+
+t=t[t>20]
+t
+
+t=t[t>70]
+t
+
+store_all=CreateDummies(store_all,'countyname',30)
+
+###....
+
+glimpse(store_all)
+sort(table(store_all$storecode))
+  
+t=table(store_all[,'storecode'])
+
+t=t[t>50]
+t
+
+store_all=CreateDummies(store_all,'storecode',50)
+
+####.......
+glimpse(store_all)
+t=sort(table(store_all[,'Areaname']))
+t
+t=t[t>50]
+t
+
+store_all=CreateDummies(store_all,'Areaname',50)
+
+####.......
+glimpse(store_all)
+t=sort(table(store_all[,'state_alpha']))
+t
+t=t[t>50]
+t
+
+t=t[t>150]
+t
+
+t=t[t>200]
+t
+
+store_all=CreateDummies(store_all,'state_alpha',200)
+
+#####...............
+
+glimpse(store_all)
+t=sort(table(store_all[,"countytownname"]))
+t
+t=t[t>20]
+t
+
+
+####.....here we drop the variables, because its cutoffs value is very low. So here we drop the variables(countytownname and Areaname)
+
+store_all$countytownname=NULL
+store_all$Areaname=NULL
+
+
+######...... Here we seperatation of the store_Type variables with its type. 
+
+glimpse(store_all)
+
+t=sort(table(store_all[,'store_Type']))
+t
+
+
+
+store_all=store_all %>%
+  mutate(store_GS=as.numeric(store_Type=='Grocery Store'),
+         store_ST1=as.numeric(store_Type=='Supermarket Type1'),
+         store_ST2=as.numeric(store_Type=='Supermarket Type2'),
+         store_ST3=as.numeric(store_Type=='Supermarket Type3')
+  ) %>%
+  select(-store_Type)
+
+
+#####........
+glimpse(store_all)
+
+
+#####....... Seperate the entire data in train or test data.
+
+store_train=store_all %>% filter(data=='train') %>% select(-data)
+store_test=store_all %>% filter(data=='test') %>% select(-data, -store)
+
+
+
+#####............ Divide the train data in 70% or 30% for validation.
+
+set.seed(2)
+s=sample(1:nrow(store_train),0.7*nrow(store_train))
+store_train1=store_train[s,]
+store_train2=store_train[-s,]
+
+####....... use linear model.
+
+library(car)
+fit=lm(store~.,data=store_train1)
+sort(vif(fit))
+summary(fit)
+
+#####..... these variables are coefficient allieas in the model so we drop these variabes.
+
+store_all$store_ST3=NULL
+store_test$store_ST3=NULL
+store_train$store_ST3=NULL
+store_train1$store_ST3=NULL
+store_train2$store_ST3=NULL
+
+
+####..................
+
+glimpse(store_all)
+####..... Check VIF values
+sort(vif(fit) ,decreasing = TRUE)
+
+#####..... drop variables with high VIF > 5.
+
+fit=lm(store~ . -Id -sales0 -sales2 -sales3 -sales1,data=store_train1)
+
+summary(fit)
+formula(fit)
+
+########............. Drop variables with high P-values.
+
+fit=lm(store ~  sales4  + 
+         State + CouSub + population + countyname_BerkshireCounty + 
+         countyname_CoosCounty + countyname_CumberlandCounty + 
+          countyname_HillsboroughCounty + 
+          countyname_PenobscotCounty + countyname_RockinghamCounty + 
+          countyname_YorkCounty + 
+          state_alpha_ME + state_alpha_NH + 
+         state_alpha_TX + state_alpha_VT  
+         , data=store_train1)
+
+
+summary(fit)
+
+#####... using DECISION Tree
+
+
+library(tree)
+store.tree=tree(store~.,data=store_train1)
+
+store.tree
+
+val.score=predict(store.tree,newdata=store_train2,type='vector')
+
+pROC::roc(store_train2$store,val.score)$auc
+
+#### AUC = 0.7552
+store.tree.final=tree(store~.,data=store_train)
+
+store.tree.final
+test.score=predict(store.tree.final,newdata=store_test,type='vector')
+
+test.score
+
+###### USING RANDOM FOREST
+
+
+library(randomForest)
+
+fit_store= randomForest(as.factor(store)~.,data=store_train1)
+fit_store
+
+response=predict(fit_store, newdata = store_train2,type = "prob")[,2]
+
+### Checking auc score ------------
+
+library(pROC)
+
+auc(roc(store_train2$store,response))
+
+####..............here my AUC score is AUC=0.8149  
+
+## prediction on test data using the entire training data -----------
+
+library(randomForest)
+
+fit_store= randomForest(as.factor(store)~.,data=store_train)
+fit_store
+
+response=predict(fit_store, newdata = store_test,type = "prob")[,2]
+
+write.csv(response,"RF_Niranjan_Kumar_Retail_P2_part2.csv",row.names = F)
+
+
